@@ -35,11 +35,17 @@ python3 scripts/run_all.py --data data/draws_real.csv   # 실데이터
 python3 -m pytest
 ```
 
-> **데이터에 대하여**: 개발 환경에서 `dhlottery.co.kr` 이 네트워크 정책으로 차단되어,
-> 기본 데이터셋은 **seed 고정 합성 IID uniform**(`data/draws_synthetic.csv`)이다.
-> 합성 데이터는 귀무모형 그 자체이므로 공정성 검정이 **'기각 실패'**로 나오는 것이
-> 정상이며, 이는 검정 도구가 올바르게 교정(calibrated)되어 있음을 보여준다.
-> 실데이터는 `scripts/fetch_dhlottery.py` 로 받아 동일 파이프라인에 넣으면 된다.
+> **데이터에 대하여**: 저장소에는 **실제 동행복권 전체 데이터**(`data/draws_real.csv`,
+> 1~1231회, 2002-12-07 ~ 2026-07-04)가 포함되어 있다. 드라이버는 실데이터가 있으면
+> 자동으로 사용한다(`--data data/draws_real.csv`). 재현용 합성 IID 데이터
+> (`data/draws_synthetic.csv`)도 함께 제공한다.
+>
+> 실데이터 출처: [smok95/lotto](https://github.com/smok95/lotto) (공개 JSON, 회차별 당첨번호).
+> 개발 환경에서 `dhlottery.co.kr` 직접 접근은 네트워크 정책으로 차단되므로, 최신 갱신은
+> 위 공개 소스 또는 네트워크가 열린 환경에서 `scripts/fetch_dhlottery.py` 를 쓴다.
+>
+> **실데이터 공정성 검정 결과**: 번호빈도 카이제곱 관측 28.39 (귀무 기대 39),
+> Monte Carlo p-value = 0.915 → **기각 실패 = 편향 증거 없음**, 공정한 추첨과 일관.
 
 ---
 
