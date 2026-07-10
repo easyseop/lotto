@@ -46,10 +46,11 @@ def _print_data_mode(args) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description="확률 기반 로또 번호 조합 추천")
     ap.add_argument("--sets", type=int, default=5, help="추천 세트 수")
-    ap.add_argument("--mode", choices=["data", "anti_share", "typical", "random"],
-                    default="data",
-                    help="data=데이터기반 최빈 / anti_share=분할위험 최소 / "
-                         "typical=전형 / random=무작위")
+    ap.add_argument("--mode",
+                    choices=["portfolio", "avoid", "data", "anti_share", "typical", "random"],
+                    default="portfolio",
+                    help="portfolio=★서로소+희소(추천) / avoid=실데이터 희소 / "
+                         "data=최빈 / anti_share=인기회피(휴리스틱) / typical=전형 / random=무작위")
     ap.add_argument("--data", default="data/draws_synthetic.csv",
                     help="data 모드에서 쓸 CSV(실데이터 권장)")
     ap.add_argument("--window", type=int, default=None,
@@ -61,6 +62,31 @@ def main() -> int:
 
     if args.mode == "data":
         return _print_data_mode(args)
+
+    if args.mode == "avoid":
+        recs = G.generate_avoid(args.sets, seed=args.seed)
+        print("\n[모드: avoid — 실데이터 검증 '희소' 조합]  당첨확률 불변 = 1/8,145,060")
+        print("공동당첨 분할위험이 낮은(사람들이 덜 고르는) 조합. 효과는 작음(십분위 극단 1.23배).\n")
+        print(f"{'#':>2}  {'번호':<26} {'합':>4} {'avoid':>7}  플래그")
+        print("-" * 64)
+        for i, c in enumerate(recs, 1):
+            nums = " ".join(f"{n:2d}" for n in c["numbers"])
+            print(f"{i:>2}  {nums:<26} {c['sum']:>4} {c['avoid_score']:>+7.2f}  "
+                  f"{','.join(c['crowd_flags']) or '-'}")
+        print("\n" + G.explain())
+        return 0
+
+    if args.mode == "portfolio":
+        p = G.generate_disjoint_portfolio(args.sets, seed=args.seed)
+        print(f"\n[모드: portfolio — ★추천: 서로소 커버리지 + 희소] 커버 {p['coverage']}/45 번호")
+        print("5장이 겹치는 번호 0개 → 하위등수 최소1회 적중↑·분산↓·이중당첨 약11배↓. 당첨확률 불변.\n")
+        print(f"{'#':>2}  {'번호':<26} {'합':>4} {'avoid':>7}")
+        print("-" * 50)
+        for i, c in enumerate(p["sets"], 1):
+            nums = " ".join(f"{n:2d}" for n in c["numbers"])
+            print(f"{i:>2}  {nums:<26} {c['sum']:>4} {c['avoid_score']:>+7.2f}")
+        print("\n" + G.explain())
+        return 0
 
     recs = G.generate(args.sets, mode=args.mode, seed=args.seed, exclude=args.exclude)
 

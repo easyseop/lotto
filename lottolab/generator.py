@@ -304,6 +304,98 @@ def frequency_candidates(
     return out
 
 
+def generate_avoid(n_sets: int = 5, *, seed: Optional[int] = None,
+                   candidates_per_set: int = 4000) -> List[dict]:
+    """
+    실데이터 기반 '희소(AVOID)' 조합 후보 n_sets 개. crowd_score.avoid_score 가
+    가장 낮은(=사람들이 덜 고르는) 전형 조합들을 반환한다.
+
+    ⚠️ 당첨확률은 불변(1/8,145,060). 오직 공동당첨 분할위험을 소폭 낮춘다.
+    """
+    from lottolab import crowd_score as CS
+
+    rng = np.random.default_rng(seed)
+    pool = np.arange(1, N + 1)
+    seen: set = set()
+    cand: List[Tuple[int, ...]] = []
+    target = max(candidates_per_set * n_sets, 3000)
+    tries = 0
+    while len(cand) < target and tries < target * 20:
+        tries += 1
+        t = tuple(sorted(int(x) for x in rng.choice(pool, size=K, replace=False)))
+        if t in seen or not is_typical(t):
+            continue
+        seen.add(t)
+        cand.append(t)
+    if not cand:
+        return generate_avoid(n_sets, seed=seed, candidates_per_set=candidates_per_set) \
+            if tries == 0 else [ _describe(t).to_dict() for t in cand[:n_sets] ]
+
+    cand.sort(key=CS.avoid_score)              # 낮을수록 희소 → 앞
+    out = []
+    for t in cand[:n_sets]:
+        d = _describe(t).to_dict()
+        d["avoid_score"] = round(CS.avoid_score(t), 3)
+        d["crowd_flags"] = [k for k, v in CS.crowd_flags(t).items() if v]
+        out.append(d)
+    return out
+
+
+def generate_disjoint_portfolio(n_sets: int = 5, *, seed: Optional[int] = None,
+                                candidates_pool: int = 20000) -> dict:
+    """
+    ★추천: '서로소 커버리지 + 희소(AVOID)' 5장 포트폴리오.
+
+    5장이 서로 겹치는 번호가 없도록(그리디) 골라 45개 중 최대 30개를 커버한다.
+    이는 하위등수 최소 1회 적중확률을 소폭 올리고(상대 +3.7%), 낭비적 이중당첨을
+    약 11배 줄이며 분산을 낮추는 '공짜' 규칙. 동시에 각 장을 avoid_score 낮은
+    (희소) 조합으로 채워 분할위험도 낮춘다.
+
+    반환 dict: {tickets:[...], coverage:int(커버 번호수), sets:[상세...]}.
+    ⚠️ 당첨확률은 장수에 비례할 뿐(5/8,145,060), 구성으로 바뀌지 않는다.
+    """
+    from lottolab import crowd_score as CS
+
+    rng = np.random.default_rng(seed)
+    pool = np.arange(1, N + 1)
+    # avoid_score 낮은 전형 후보를 다량 확보
+    seen: set = set()
+    cand: List[Tuple[int, ...]] = []
+    tries = 0
+    while len(cand) < candidates_pool and tries < candidates_pool * 15:
+        tries += 1
+        t = tuple(sorted(int(x) for x in rng.choice(pool, size=K, replace=False)))
+        if t in seen or not is_typical(t):
+            continue
+        seen.add(t)
+        cand.append(t)
+    cand.sort(key=CS.avoid_score)              # 희소 우선
+
+    # 그리디: 이미 쓴 번호와 겹치지 않는(서로소) 후보를 순서대로 채택
+    used: set = set()
+    chosen: List[Tuple[int, ...]] = []
+    for t in cand:
+        if used.isdisjoint(t):
+            chosen.append(t)
+            used.update(t)
+            if len(chosen) == n_sets:
+                break
+    # 서로소로 n_sets 를 못 채우면(가능성 낮음) 남은 자리는 희소 순으로 보충
+    if len(chosen) < n_sets:
+        for t in cand:
+            if t not in chosen:
+                chosen.append(t)
+                if len(chosen) == n_sets:
+                    break
+
+    sets = []
+    for t in chosen:
+        d = _describe(t).to_dict()
+        d["avoid_score"] = round(CS.avoid_score(t), 3)
+        sets.append(d)
+    return {"tickets": [list(t) for t in chosen], "coverage": len(used), "sets": sets}
+
+
 def explain() -> str:
     """생성기의 정직한 한계 설명(리포트/출력용)."""
     return (

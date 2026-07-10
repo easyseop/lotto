@@ -229,14 +229,14 @@
       <p class="hint">모드를 고르고 <b>번호 뽑기</b>를 누르세요. 각 세트의 프로필과 분할위험 점수를 함께 보여줍니다.</p>
 
       <div class="modes" role="group" aria-label="생성 모드">
-        <button class="chip" data-mode="data" aria-pressed="true">
-          데이터 기반 최빈 <small>많이 나온 번호 조합</small>
+        <button class="chip" data-mode="portfolio" aria-pressed="true">
+          ★ 서로소 5장 <small>커버리지+희소 (추천)</small>
         </button>
-        <button class="chip" data-mode="anti_share" aria-pressed="false">
-          분할위험 최소 <small>인기번호 회피</small>
+        <button class="chip" data-mode="avoid" aria-pressed="false">
+          실데이터 희소 <small>분할위험 최소</small>
         </button>
-        <button class="chip" data-mode="typical" aria-pressed="false">
-          통계적 전형 <small>당첨 프로필</small>
+        <button class="chip" data-mode="data" aria-pressed="false">
+          최빈 <small>많이 나온 번호 (비권장)</small>
         </button>
         <button class="chip" data-mode="random" aria-pressed="false">
           순수 무작위 <small>baseline</small>
@@ -257,8 +257,35 @@
 
       <div class="caveat">
         <b>정직한 안내.</b> 위 번호의 1등 확률은 다른 어떤 조합과도 동일한 1/8,145,060 입니다.
-        ‘분할위험’은 판매 데이터가 아닌 <b>선택 편향 연구 기반 휴리스틱 추정</b>(생일 편향 1~31 회피 등)이며,
-        당첨 시 나눠 가질 가능성을 낮출 뿐 당첨 자체를 돕지 않습니다. 로또는 오락비 한도 안에서만.
+        ‘군중도(avoid)’는 <b>실제 1등 당첨자 수 1,229회로 검증</b>한 값(사람들이 덜 고르는 조합일수록 낮음,
+        Spearman +0.27)이지만, <b>효과는 작습니다</b> — 최상·최하 극단이라야 당첨 시 분할이 약 1.23배 차이.
+        당첨 <b>확률은 못 올리고</b>, ‘당첨 시 덜 나눠 갖는’ 기대값만 소폭 개선할 뿐입니다. 오락비 한도 안에서만.
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 분석 인사이트 ================= -->
+  <section>
+    <div class="card">
+      <h2>실데이터 1,231회가 말해주는 것 — “최빈”은 답이 아니다</h2>
+      <p class="hint">실제 1등 당첨자 수(= 그 조합을 몇 명이 골랐나)를 회귀분석해 “사람들이 몰리는 조합”을 역추론했습니다.</p>
+      <div class="why">
+        <div class="item">
+          <h3>몰리는 조합 (피하기)</h3>
+          <p>생일 편중(≤12 여러 개, z=+4.6, p&lt;1e-5), 6개 전부 ≤31인 순수 생일조합, 낮은 합계, 균등 간격, 럭키7. 당첨되면 많이 나눠 갖게 됩니다.</p>
+        </div>
+        <div class="item">
+          <h3>희소 조합 (유리)</h3>
+          <p>32~45 고번호 포함, 불규칙 간격, 합계 150~200. 실제로 공동당첨자가 적었습니다(검증 Spearman +0.27, p≈1e-22).</p>
+        </div>
+        <div class="item">
+          <h3>“최빈”의 진짜 위치</h3>
+          <p>가장 많이 나온 번호 = 예측력 0(공정성 p=0.915). 게다가 대중이 따라 하는 유명 전략이라 <b>공동당첨 위험은 오히려 커질 수 있음</b> → 비권장.</p>
+        </div>
+      </div>
+      <div class="caveat" style="margin-top:14px">
+        단, <b>효과크기는 작습니다</b>: 최상·최하 십분위라야 당첨 시 분할이 1.23배 차이. 당첨 <b>확률(1/8,145,060)은 불변</b>.
+        여러 장 살 거라면 “서로소 5장(★추천)”이 45개 중 30개를 커버해 하위등수 적중률↑·분산↓까지 챙깁니다.
       </div>
     </div>
   </section>
@@ -305,6 +332,20 @@
   // 실제 데이터에서 집계한 번호별(1..45) 출현 횟수. (동행복권 1~1231회, 2002-12-07 ~ 2026-07-04)
   const DATA_META = { source: "real", rounds: 1231, updated: "2026-07-04" };
   const FREQ = [0,169,154,172,162,153,165,168,158,136,161,165,178,179,172,167,168,171,176,168,169,166,144,147,165,152,165,181,157,155,158,168,144,174,184,162,163,172,170,167,172,150,157,163,164,175]; // index 1..45
+
+  // ── 실데이터 검증 AVOID 점수 (crowd_score.py 이식) ──
+  // 실제 1등 당첨자수(=인기) GLM 계수 기반. 낮을수록 희소 → 공동당첨 분할위험↓.
+  const CS_MEAN = {ultralow12:1.5985, low31:4.1350, has7:0.1335, sum:138.0157, max_run:1.5899, gap_std:4.6826};
+  const CS_STD  = {ultralow12:1.0187, low31:1.0667, has7:0.3401, sum:29.9248, max_run:0.6091, gap_std:1.9128};
+  const CS_W    = {ultralow12:1.0, low31:0.6, has7:0.4, sum:-0.8, max_run:-0.6, gap_std:-0.6};
+  function csFeatures(t){
+    const s=[...t].sort((a,b)=>a-b), gaps=[]; for(let i=0;i<5;i++) gaps.push(s[i+1]-s[i]);
+    const mg=gaps.reduce((a,b)=>a+b,0)/5, gv=gaps.reduce((a,b)=>a+(b-mg)**2,0)/5;
+    return { ultralow12:t.filter(x=>x<=12).length, low31:t.filter(x=>x<=31).length,
+      has7:t.includes(7)?1:0, sum:t.reduce((a,b)=>a+b,0), max_run:maxRun(t), gap_std:Math.sqrt(gv) };
+  }
+  function avoidScore(t){ const f=csFeatures(t); let s=0;
+    for(const k in CS_W){ s += CS_W[k]*((f[k]-CS_MEAN[k])/CS_STD[k]); } return s; }
 
   // ---------- 조합 통계 ----------
   const oddCount = t => t.reduce((a,x)=>a+(x%2),0);
@@ -360,8 +401,32 @@
       .slice(0,n).map(o=>o.t);
   }
 
+  // 전형 후보 다량 생성(avoid/portfolio 공용)
+  function typicalCandidates(target){
+    const seen=new Set(), cand=[]; let tries=0;
+    while(cand.length<target && tries<target*25){ tries++; const t=sampleCombo(); const k=keyOf(t);
+      if(seen.has(k)||!isTypical(t)) continue; seen.add(k); cand.push(t); }
+    return cand;
+  }
+  function generateAvoid(n){
+    const cand=typicalCandidates(Math.max(4000,800*n));
+    if(!cand.length) return generate(n,"random");
+    return cand.sort((a,b)=>avoidScore(a)-avoidScore(b)).slice(0,n);
+  }
+  let lastCoverage=0;
+  function generatePortfolio(n){
+    const cand=typicalCandidates(6000).sort((a,b)=>avoidScore(a)-avoidScore(b));
+    const used=new Set(), chosen=[];
+    for(const t of cand){ if(t.every(x=>!used.has(x))){ chosen.push(t); t.forEach(x=>used.add(x)); if(chosen.length===n) break; } }
+    for(const t of cand){ if(chosen.length>=n) break; if(!chosen.includes(t)) chosen.push(t); }
+    lastCoverage=used.size;
+    return chosen.slice(0,n);
+  }
+
   function generate(n, mode){
     if(mode==="data") return generateData(n);
+    if(mode==="avoid") return generateAvoid(n);
+    if(mode==="portfolio") return generatePortfolio(n);
     const seen=new Set(), out=[];
     if(mode==="random"){
       while(out.length<n){ const t=sampleCombo(); if(!seen.has(keyOf(t))){ seen.add(keyOf(t)); out.push(t);} }
@@ -383,27 +448,30 @@
 
   // ---------- 렌더 ----------
   const setsEl = document.getElementById("sets");
-  let currentMode = "data";
+  let currentMode = "portfolio";
   const MODE_NOTE = {
-    data:       "→ 데이터에서 가장 많이 나온 번호들로 구성한 조합 (출현합 큰 순)",
-    anti_share: "→ 통계적으로 전형적이면서 사람들이 몰리는 번호를 피한 조합",
-    typical:    "→ 실제 당첨 조합의 프로필(홀짝·합계·연속)에 부합하는 무작위 조합",
-    random:     "→ 순수 균등 무작위. 다른 모드와 1등 확률은 완전히 동일합니다."
+    portfolio:  "→ 5장이 번호가 안 겹치게(서로소) 30개 커버 + 각 장을 희소 조합으로",
+    avoid:      "→ 실제 당첨자수로 검증한 '사람들이 덜 고르는' 희소 조합 (분할위험↓)",
+    data:       "→ 데이터에서 가장 많이 나온 번호 조합 (예측력 없음·분할위험 오히려 불리)",
+    random:     "→ 순수 균등 무작위. 모든 모드와 1등 확률은 완전히 동일합니다."
   };
 
   function updateDatabar(){
     const bar = document.getElementById("databar");
-    if(currentMode !== "data"){ bar.style.display="none"; return; }
     bar.style.display="block";
-    if(DATA_META.source === "synthetic"){
-      bar.className = "databar synthetic";
-      bar.innerHTML = `⚠️ 현재 <b>합성(무작위) 데이터 ${DATA_META.rounds}회차</b> 기준입니다 — `+
-        `실제 추첨이 아니라 '최빈'이 노이즈입니다. 실데이터를 넣으면 진짜 많이 나온 번호로 바뀝니다.`;
-    } else {
+    if(currentMode === "portfolio"){
       bar.className = "databar";
-      bar.innerHTML = `📊 <b>실제 동행복권 데이터 1~${DATA_META.rounds}회차</b>`+
-        ` (2002-12-07 ~ ${DATA_META.updated}) 의 번호별 출현 횟수 기준으로 뽑은 조합입니다.`;
-    }
+      bar.innerHTML = `📊 실데이터 <b>1~${DATA_META.rounds}회</b> 검증: 서로소 5장은 `+
+        `<b>45개 중 ${lastCoverage||30}개 커버</b> → 하위등수 최소1회 적중 상대 +3.7%, 낭비적 이중당첨 약 11배↓.`;
+    } else if(currentMode === "avoid"){
+      bar.className = "databar";
+      bar.innerHTML = `📊 실데이터 <b>1~${DATA_META.rounds}회 1등 당첨자수</b>로 검증한 희소 조합 `+
+        `(avoid 점수↓ = 덜 몰림). 효과크기 작음: 최상·최하 십분위 공동당첨 <b>1.23배</b>.`;
+    } else if(currentMode === "data"){
+      bar.className = "databar synthetic";
+      bar.innerHTML = `⚠️ <b>최빈은 예측력이 없습니다</b> (빈도차는 노이즈, 공정성 p=0.915). `+
+        `게다가 '핫넘버'는 대중이 따라 해 공동당첨 위험이 오히려 커질 수 있어 <b>비권장</b>입니다.`;
+    } else { bar.style.display="none"; }
   }
 
   function renderSet(t, idx){
@@ -414,11 +482,17 @@
       b.style.setProperty("--bg", ballColor(n)); b.style.animationDelay=(idx*60+i*45)+"ms";
       b.textContent=String(n).padStart(2,"0"); balls.appendChild(b); });
     const prof=document.createElement("div"); prof.className="profile";
-    const freqLine = currentMode==="data"
-      ? `<div class="line">출현합 <b class="mono">${freqScore(t)}</b> · 홀짝 <b>${o}:${6-o}</b> · 합 <b class="mono">${s}</b></div>`
-      : `<div class="line">홀짝 <b>${o}:${6-o}</b> · 저고 <b>${l}:${6-l}</b> · 합 <b class="mono">${s}</b></div>`;
-    prof.innerHTML = freqLine +
-      `<div class="risk">분할위험 <div class="meter"><i style="width:${Math.round(risk*100)}%"></i></div> <b class="mono" style="color:var(--ink)">${risk.toFixed(2)}</b></div>`;
+    let line;
+    if(currentMode==="data")
+      line = `<div class="line">출현합 <b class="mono">${freqScore(t)}</b> · 홀짝 <b>${o}:${6-o}</b> · 합 <b class="mono">${s}</b></div>`;
+    else if(currentMode==="avoid" || currentMode==="portfolio")
+      line = `<div class="line">avoid <b class="mono">${avoidScore(t).toFixed(2)}</b> · 홀짝 <b>${o}:${6-o}</b> · 합 <b class="mono">${s}</b></div>`;
+    else
+      line = `<div class="line">홀짝 <b>${o}:${6-o}</b> · 저고 <b>${l}:${6-l}</b> · 합 <b class="mono">${s}</b></div>`;
+    // 희소도 막대(avoid 점수를 0~1로 매핑; 낮을수록 희소=유리, 초록쪽)
+    const av = avoidScore(t), spark = Math.min(1, Math.max(0, (av+5)/10));
+    prof.innerHTML = line +
+      `<div class="risk">군중도 <div class="meter"><i style="width:${Math.round(spark*100)}%"></i></div> <b class="mono" style="color:var(--ink)">${av>=0?'+':''}${av.toFixed(1)}</b></div>`;
     row.append(balls, prof);
     return row;
   }
