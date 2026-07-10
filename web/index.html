@@ -1,0 +1,419 @@
+<title>로또 리얼리티 체크 · 확률 기반 번호 생성기</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --ground: #0d1017;
+    --panel: #151a22;
+    --panel-2: #1b212b;
+    --line: #262e3a;
+    --ink: #e7edf5;
+    --muted: #8a97a8;
+    --faint: #5c6675;
+    --accent: #43d6c4;        /* verified-exact mint */
+    --accent-ink: #0b3d38;
+    --amber: #f0b429;
+    --amber-soft: #3a2f12;
+    --radius: 14px;
+    --maxw: 940px;
+    /* 공식 로또 볼 색 (동행복권 구간별) */
+    --ball-1: #f6c101;   /* 1-10 노랑 */
+    --ball-2: #4aa3e0;   /* 11-20 파랑 */
+    --ball-3: #f0656a;   /* 21-30 빨강 */
+    --ball-4: #9aa4b2;   /* 31-40 회색 */
+    --ball-5: #9ecf46;   /* 41-45 초록 */
+    --ball-text: #10141b;
+    --shadow: 0 1px 0 rgba(255,255,255,.03), 0 12px 30px -18px rgba(0,0,0,.7);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --ground: #f4f6f9;
+      --panel: #ffffff;
+      --panel-2: #f0f3f7;
+      --line: #e2e7ee;
+      --ink: #161c24;
+      --muted: #5a6472;
+      --faint: #94a0b0;
+      --accent: #12a594;
+      --accent-ink: #dffbf6;
+      --amber: #a86a00;
+      --amber-soft: #fbf1d8;
+      --shadow: 0 1px 0 rgba(255,255,255,.6), 0 14px 30px -20px rgba(20,30,50,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0d1017; --panel:#151a22; --panel-2:#1b212b; --line:#262e3a;
+    --ink:#e7edf5; --muted:#8a97a8; --faint:#5c6675; --accent:#43d6c4;
+    --accent-ink:#0b3d38; --amber:#f0b429; --amber-soft:#3a2f12;
+    --shadow:0 1px 0 rgba(255,255,255,.03), 0 12px 30px -18px rgba(0,0,0,.7);
+  }
+  :root[data-theme="light"] {
+    --ground:#f4f6f9; --panel:#ffffff; --panel-2:#f0f3f7; --line:#e2e7ee;
+    --ink:#161c24; --muted:#5a6472; --faint:#94a0b0; --accent:#12a594;
+    --accent-ink:#dffbf6; --amber:#a86a00; --amber-soft:#fbf1d8;
+    --shadow:0 1px 0 rgba(255,255,255,.6), 0 14px 30px -20px rgba(20,30,50,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(67,214,196,.06), transparent 60%),
+      linear-gradient(var(--ground), var(--ground));
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .grid-bg {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 44px 44px;
+    -webkit-mask-image: radial-gradient(900px 500px at 50% 0%, #000 0%, transparent 70%);
+            mask-image: radial-gradient(900px 500px at 50% 0%, #000 0%, transparent 70%);
+  }
+  .wrap { position: relative; z-index: 1; max-width: var(--maxw); margin: 0 auto; padding: 0 20px 72px; }
+
+  .mono { font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, monospace; font-variant-numeric: tabular-nums; }
+  .eyebrow {
+    font-size: 12px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--accent); font-weight: 700;
+  }
+
+  /* ---------- hero ---------- */
+  header { padding: 64px 0 26px; text-align: center; }
+  h1 {
+    font-size: clamp(30px, 6vw, 50px); line-height: 1.08; margin: 14px 0 10px;
+    letter-spacing: -.02em; text-wrap: balance; font-weight: 800;
+  }
+  .lede { color: var(--muted); max-width: 60ch; margin: 0 auto; font-size: clamp(15px,2.4vw,17px); text-wrap: balance; }
+  .odds-hero {
+    margin: 30px auto 4px; display: inline-flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 18px 30px; border: 1px solid var(--line); border-radius: var(--radius);
+    background: linear-gradient(var(--panel), var(--panel-2)); box-shadow: var(--shadow);
+  }
+  .odds-hero .k { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+  .odds-hero .v { font-size: clamp(26px, 6vw, 40px); font-weight: 800; letter-spacing: -.01em; }
+  .odds-hero .v span { color: var(--accent); }
+  .odds-hero .sub { font-size: 13px; color: var(--muted); }
+
+  /* ---------- panels ---------- */
+  section { margin-top: 30px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 22px;
+  }
+  .card h2 { font-size: 18px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .card .hint { color: var(--muted); font-size: 13.5px; margin: 0 0 16px; }
+
+  /* ---------- mode chips ---------- */
+  .modes { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .chip {
+    appearance: none; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600;
+    padding: 9px 14px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--panel-2); color: var(--muted); transition: .15s;
+  }
+  .chip:hover { color: var(--ink); border-color: var(--faint); }
+  .chip[aria-pressed="true"] {
+    background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700;
+  }
+  .chip small { display: block; font-weight: 500; font-size: 11px; opacity: .8; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .btn {
+    appearance: none; cursor: pointer; font: inherit; font-weight: 700; font-size: 15px;
+    padding: 12px 22px; border-radius: 11px; border: 1px solid var(--accent);
+    background: var(--accent); color: var(--accent-ink); transition: .15s; letter-spacing: .01em;
+  }
+  .btn:hover { filter: brightness(1.06); transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn.ghost:hover { border-color: var(--faint); }
+  .btn:focus-visible, .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- results ---------- */
+  .sets { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
+  .set {
+    display: grid; grid-template-columns: 1fr auto; gap: 10px 16px; align-items: center;
+    padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2);
+  }
+  .balls { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ball {
+    --bg: var(--ball-1);
+    width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center;
+    font-weight: 800; font-size: 16px; color: var(--ball-text);
+    background: radial-gradient(circle at 34% 30%, rgba(255,255,255,.7), rgba(255,255,255,0) 42%), var(--bg);
+    box-shadow: inset 0 -3px 6px rgba(0,0,0,.22), 0 2px 5px rgba(0,0,0,.25);
+    font-family: ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums;
+  }
+  .ball.reveal { animation: pop .34s cubic-bezier(.2,.9,.3,1.2) backwards; }
+  @keyframes pop { from { opacity: 0; transform: scale(.4) translateY(6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .ball.reveal { animation: none; } }
+
+  .profile { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; min-width: 148px; }
+  .profile .line { font-size: 12.5px; color: var(--muted); }
+  .profile .line b { color: var(--ink); font-weight: 700; }
+  .risk { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+  .meter { width: 68px; height: 6px; border-radius: 999px; background: var(--line); overflow: hidden; }
+  .meter i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--amber)); }
+
+  .empty { color: var(--faint); font-size: 14px; text-align: center; padding: 26px 0; }
+
+  /* ---------- caveat ---------- */
+  .caveat {
+    margin-top: 16px; border: 1px solid color-mix(in srgb, var(--amber) 40%, var(--line));
+    background: var(--amber-soft); border-radius: 12px; padding: 14px 16px;
+    font-size: 13.5px; color: var(--ink);
+  }
+  .caveat b { color: var(--amber); }
+
+  /* ---------- facts ---------- */
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .fact {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 15px 16px;
+  }
+  .fact .k { font-size: 12px; color: var(--muted); }
+  .fact .v { font-size: 22px; font-weight: 800; letter-spacing: -.01em; margin-top: 3px; }
+  .fact .v small { font-size: 13px; color: var(--faint); font-weight: 600; }
+  .fact.hl .v { color: var(--accent); }
+
+  /* ---------- why ---------- */
+  .why { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px,1fr)); gap: 14px; }
+  .why .item { border-left: 2px solid var(--accent); padding: 2px 0 2px 14px; }
+  .why .item h3 { margin: 0 0 4px; font-size: 15px; }
+  .why .item p { margin: 0; color: var(--muted); font-size: 13.5px; }
+
+  footer { margin-top: 40px; text-align: center; color: var(--faint); font-size: 12.5px; line-height: 1.7; }
+  .themetoggle {
+    position: fixed; top: 14px; right: 14px; z-index: 3; appearance: none; cursor: pointer;
+    width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--ink); font-size: 16px;
+  }
+  .themetoggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (max-width: 560px) {
+    .set { grid-template-columns: 1fr; }
+    .profile { align-items: flex-start; }
+    .ball { width: 38px; height: 38px; font-size: 15px; }
+  }
+</style>
+
+<div class="grid-bg"></div>
+<button class="themetoggle" id="themeBtn" title="테마 전환" aria-label="테마 전환">◑</button>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">로또 6/45 · 확률 리얼리티 체크</div>
+    <h1>확률로 뽑되, 거짓말은 안 합니다</h1>
+    <p class="lede">
+      이 도구는 당첨 확률을 <b>높이지 않습니다</b>. 어떤 6개 조합이든 1등 확률은 정확히 같기 때문입니다.
+      대신 통계적으로 근거 있는 조합을 뽑아주고, 유일하게 실익이 있는 레버 — <b>공동당첨 분할위험</b> — 만 줄입니다.
+    </p>
+    <div class="odds-hero">
+      <div class="k">모든 조합의 1등 확률</div>
+      <div class="v mono">1 / <span>8,145,060</span></div>
+      <div class="sub">= C(45,6). 번호를 어떻게 고르든 이 값은 변하지 않습니다.</div>
+    </div>
+  </header>
+
+  <!-- ================= 생성기 ================= -->
+  <section>
+    <div class="card">
+      <h2>확률 기반 번호 생성기</h2>
+      <p class="hint">모드를 고르고 <b>번호 뽑기</b>를 누르세요. 각 세트의 프로필과 분할위험 점수를 함께 보여줍니다.</p>
+
+      <div class="modes" role="group" aria-label="생성 모드">
+        <button class="chip" data-mode="anti_share" aria-pressed="true">
+          분할위험 최소 <small>인기번호 회피 (권장)</small>
+        </button>
+        <button class="chip" data-mode="typical" aria-pressed="false">
+          통계적 전형 <small>당첨 프로필 부합</small>
+        </button>
+        <button class="chip" data-mode="random" aria-pressed="false">
+          순수 무작위 <small>baseline</small>
+        </button>
+      </div>
+
+      <div class="controls">
+        <button class="btn" id="genBtn">번호 뽑기</button>
+        <button class="btn ghost" id="moreBtn">한 세트 더</button>
+        <span class="mono" id="modeNote" style="color:var(--muted);font-size:13px"></span>
+      </div>
+
+      <div class="sets" id="sets">
+        <div class="empty">아직 뽑은 번호가 없습니다. <b>번호 뽑기</b>를 눌러보세요.</div>
+      </div>
+
+      <div class="caveat">
+        <b>정직한 안내.</b> 위 번호의 1등 확률은 다른 어떤 조합과도 동일한 1/8,145,060 입니다.
+        ‘분할위험’은 판매 데이터가 아닌 <b>선택 편향 연구 기반 휴리스틱 추정</b>(생일 편향 1~31 회피 등)이며,
+        당첨 시 나눠 가질 가능성을 낮출 뿐 당첨 자체를 돕지 않습니다. 로또는 오락비 한도 안에서만.
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 확률 팩트 ================= -->
+  <section>
+    <div class="eyebrow" style="margin-bottom:12px">조합론으로 계산한 정확값 — 시뮬레이션 아님</div>
+    <div class="facts" id="facts"></div>
+  </section>
+
+  <!-- ================= 왜 예측 불가 ================= -->
+  <section>
+    <div class="card">
+      <h2>왜 ‘과거 데이터 예측’은 통하지 않나</h2>
+      <p class="hint">이 저장소의 백테스트·공정성 검정이 실제로 보여준 결론입니다.</p>
+      <div class="why">
+        <div class="item">
+          <h3>독립·균등 추첨</h3>
+          <p>매 회차는 서로 독립. 오래 안 나온 번호가 ‘나올 때가 된’ 것이 아닙니다(도박사의 오류). 다음 회차 번호 출현확률은 언제나 2/15.</p>
+        </div>
+        <div class="item">
+          <h3>패턴 = 조합군일 뿐</h3>
+          <p>홀짝·합계 같은 패턴은 ‘조합 무리’의 빈도를 설명할 뿐, 개별 한 장의 당첨확률(1/814만)은 바꾸지 못합니다.</p>
+        </div>
+        <div class="item">
+          <h3>무작위와 구별 안 됨</h3>
+          <p>핫·콜드·미출현 전략을 walk-forward로 검증하면 모두 무작위 baseline의 변동 범위 안. ML도 학습할 신호가 없습니다.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div>lottolab · 8,145,060개 조합 완전열거로 검증된 확률 엔진 · 151개 테스트 통과</div>
+    <div>교육용 프로젝트입니다. 로또의 기대수익률은 음수이며 구매를 권장하지 않습니다.</div>
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const TOTAL = 8145060;
+
+  // ---------- 조합 통계 ----------
+  const oddCount = t => t.reduce((a,x)=>a+(x%2),0);
+  const lowCount = (t,lm=22) => t.filter(x=>x<=lm).length;
+  const sum = t => t.reduce((a,x)=>a+x,0);
+  function maxRun(t){ const s=[...t].sort((a,b)=>a-b); let best=1,run=1;
+    for(let i=1;i<s.length;i++){ run = s[i]===s[i-1]+1 ? run+1 : 1; best=Math.max(best,run);} return best; }
+  function isTypical(t){ const o=oddCount(t),l=lowCount(t),s=sum(t);
+    return o>=2&&o<=4 && l>=2&&l<=4 && s>=100&&s<=170 && maxRun(t)<=2; }
+
+  // ---------- 분할위험 (파이썬 generator.py 와 동일 로직) ----------
+  function sharingRisk(t){
+    const nCal = t.filter(x=>x<=31).length;
+    const nSingle = t.filter(x=>x<=9).length;
+    const nHigh = t.filter(x=>x>=32).length;
+    const hasSeven = t.includes(7)?1:0;
+    const run = maxRun(t);
+    const s=[...t].sort((a,b)=>a-b);
+    const diffs=[]; for(let i=0;i<s.length-1;i++) diffs.push(s[i+1]-s[i]);
+    const sameGap = Math.max(0,...[...new Set(diffs)].map(d=>diffs.filter(x=>x===d).length));
+    const last = t.map(x=>x%10);
+    const maxLast = Math.max(0,...[...new Set(last)].map(d=>last.filter(x=>x===d).length));
+    const raw = 1.0*nCal + 0.6*nSingle + 0.4*hasSeven
+      + 0.8*Math.max(0,run-2) + 0.5*Math.max(0,sameGap-2) + 0.5*Math.max(0,maxLast-2)
+      - 0.8*nHigh;
+    return Math.min(1, Math.max(0, raw/10));
+  }
+
+  // ---------- 표본/생성 ----------
+  function sampleCombo(){ const p=[]; while(p.length<6){ const n=1+Math.floor(Math.random()*45); if(!p.includes(n)) p.push(n);} return p.sort((a,b)=>a-b); }
+  function keyOf(t){ return t.join(","); }
+
+  function generate(n, mode){
+    const seen=new Set(), out=[];
+    if(mode==="random"){
+      while(out.length<n){ const t=sampleCombo(); if(!seen.has(keyOf(t))){ seen.add(keyOf(t)); out.push(t);} }
+      return out;
+    }
+    const cand=[]; let tries=0; const target=Math.max(1500*n, 1500);
+    while(cand.length<target && tries<target*25){ tries++; const t=sampleCombo(); const k=keyOf(t);
+      if(seen.has(k)) continue; if(isTypical(t)){ seen.add(k); cand.push(t);} }
+    if(!cand.length) return generate(n,"random");
+    if(mode==="typical") return cand.slice(0,n);
+    return cand.map(t=>({t,r:sharingRisk(t)})).sort((a,b)=>a.r-b.r).slice(0,n).map(o=>o.t);
+  }
+
+  // ---------- 볼 색 ----------
+  function ballColor(n){
+    if(n<=10) return "var(--ball-1)"; if(n<=20) return "var(--ball-2)";
+    if(n<=30) return "var(--ball-3)"; if(n<=40) return "var(--ball-4)"; return "var(--ball-5)";
+  }
+
+  // ---------- 렌더 ----------
+  const setsEl = document.getElementById("sets");
+  let currentMode = "anti_share";
+  const MODE_NOTE = {
+    anti_share: "→ 통계적으로 전형적이면서 사람들이 몰리는 번호를 피한 조합",
+    typical:    "→ 실제 당첨 조합의 프로필(홀짝·합계·연속)에 부합하는 무작위 조합",
+    random:     "→ 순수 균등 무작위. 위 두 모드와 1등 확률은 완전히 동일합니다."
+  };
+
+  function renderSet(t, idx){
+    const o=oddCount(t), l=lowCount(t), s=sum(t), risk=sharingRisk(t);
+    const row=document.createElement("div"); row.className="set";
+    const balls=document.createElement("div"); balls.className="balls";
+    t.forEach((n,i)=>{ const b=document.createElement("div"); b.className="ball reveal";
+      b.style.setProperty("--bg", ballColor(n)); b.style.animationDelay=(idx*60+i*45)+"ms";
+      b.textContent=String(n).padStart(2,"0"); balls.appendChild(b); });
+    const prof=document.createElement("div"); prof.className="profile";
+    prof.innerHTML =
+      `<div class="line">홀짝 <b>${o}:${6-o}</b> · 저고 <b>${l}:${6-l}</b> · 합 <b class="mono">${s}</b></div>`+
+      `<div class="risk">분할위험 <div class="meter"><i style="width:${Math.round(risk*100)}%"></i></div> <b class="mono" style="color:var(--ink)">${risk.toFixed(2)}</b></div>`;
+    row.append(balls, prof);
+    return row;
+  }
+
+  function draw(n){
+    setsEl.innerHTML="";
+    const sets=generate(n, currentMode);
+    sets.forEach((t,i)=> setsEl.appendChild(renderSet(t,i)));
+    document.getElementById("modeNote").textContent = MODE_NOTE[currentMode];
+  }
+  function addOne(){
+    if(setsEl.querySelector(".empty")) { draw(1); return; }
+    const t=generate(1,currentMode)[0];
+    setsEl.appendChild(renderSet(t, setsEl.children.length));
+  }
+
+  // ---------- 모드 칩 ----------
+  document.querySelectorAll(".chip").forEach(chip=>{
+    chip.addEventListener("click", ()=>{
+      document.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed","false"));
+      chip.setAttribute("aria-pressed","true");
+      currentMode = chip.dataset.mode;
+      draw(5);
+    });
+  });
+  document.getElementById("genBtn").addEventListener("click", ()=>draw(5));
+  document.getElementById("moreBtn").addEventListener("click", addOne);
+
+  // ---------- 확률 팩트 ----------
+  const FACTS = [
+    {k:"1등", v:"1 / 8,145,060", hl:true},
+    {k:"2등 (5+보너스)", v:"1 / 1,357,510"},
+    {k:"3등 (5개)", v:"1 / 35,724"},
+    {k:"4등 (4개)", v:"1 / 733"},
+    {k:"5등 (3개)", v:"1 / 45"},
+    {k:"연속번호 포함", v:'52.9<small>%</small>', note:true},
+    {k:"합계 100~170", v:'75.5<small>%</small>'},
+    {k:"번호 카이제곱 E[χ²]", v:'39 <small>(44 아님)</small>'},
+  ];
+  const factsEl=document.getElementById("facts");
+  FACTS.forEach(f=>{ const d=document.createElement("div"); d.className="fact"+(f.hl?" hl":"");
+    d.innerHTML=`<div class="k">${f.k}</div><div class="v mono">${f.v}</div>`; factsEl.appendChild(d); });
+
+  // ---------- 테마 토글 ----------
+  const root=document.documentElement, tb=document.getElementById("themeBtn");
+  tb.addEventListener("click", ()=>{
+    const cur = root.getAttribute("data-theme")
+      || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark":"light");
+    root.setAttribute("data-theme", cur==="dark" ? "light":"dark");
+  });
+
+  // 초기 1회 자동 생성
+  draw(5);
+})();
+</script>
