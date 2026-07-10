@@ -120,6 +120,12 @@
   }
   .chip small { display: block; font-weight: 500; font-size: 11px; opacity: .8; }
 
+  .databar {
+    font-size: 12.5px; color: var(--muted); margin: 0 0 14px; padding: 9px 12px;
+    border: 1px dashed var(--line); border-radius: 9px; background: var(--panel-2);
+  }
+  .databar b { color: var(--ink); }
+  .databar.synthetic { border-color: color-mix(in srgb, var(--amber) 45%, var(--line)); }
   .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
   .btn {
     appearance: none; cursor: pointer; font: inherit; font-weight: 700; font-size: 15px;
@@ -223,16 +229,21 @@
       <p class="hint">모드를 고르고 <b>번호 뽑기</b>를 누르세요. 각 세트의 프로필과 분할위험 점수를 함께 보여줍니다.</p>
 
       <div class="modes" role="group" aria-label="생성 모드">
-        <button class="chip" data-mode="anti_share" aria-pressed="true">
-          분할위험 최소 <small>인기번호 회피 (권장)</small>
+        <button class="chip" data-mode="data" aria-pressed="true">
+          데이터 기반 최빈 <small>많이 나온 번호 조합</small>
+        </button>
+        <button class="chip" data-mode="anti_share" aria-pressed="false">
+          분할위험 최소 <small>인기번호 회피</small>
         </button>
         <button class="chip" data-mode="typical" aria-pressed="false">
-          통계적 전형 <small>당첨 프로필 부합</small>
+          통계적 전형 <small>당첨 프로필</small>
         </button>
         <button class="chip" data-mode="random" aria-pressed="false">
           순수 무작위 <small>baseline</small>
         </button>
       </div>
+
+      <div class="databar" id="databar"></div>
 
       <div class="controls">
         <button class="btn" id="genBtn">번호 뽑기</button>
@@ -291,6 +302,10 @@
   "use strict";
   const TOTAL = 8145060;
 
+  // 실제 데이터에서 집계한 번호별(1..45) 출현 횟수. 실데이터 주입 시 이 블록만 교체.
+  const DATA_META = { source: "synthetic", rounds: 1180 };
+  const FREQ = [0,143,166,161,183,158,173,154,149,166,155,148,145,172,145,137,156,155,161,150,151,134,163,174,143,150,151,156,171,179,146,160,173,172,167,161,145,149,172,165,152,149,154,156,156,154]; // index 1..45
+
   // ---------- 조합 통계 ----------
   const oddCount = t => t.reduce((a,x)=>a+(x%2),0);
   const lowCount = (t,lm=22) => t.filter(x=>x<=lm).length;
@@ -322,7 +337,31 @@
   function sampleCombo(){ const p=[]; while(p.length<6){ const n=1+Math.floor(Math.random()*45); if(!p.includes(n)) p.push(n);} return p.sort((a,b)=>a-b); }
   function keyOf(t){ return t.join(","); }
 
+  const freqScore = t => t.reduce((a,x)=>a+(FREQ[x]||0),0);
+
+  // 데이터 기반: 최빈 상위 풀에서 전형 조합을 만들어 '출현합' 큰 순으로.
+  function generateData(n){
+    const pool = Array.from({length:45},(_,i)=>i+1)
+      .sort((a,b)=> (FREQ[b]-FREQ[a]) || (a-b)).slice(0, 18);
+    const seen=new Set(), cand=[];
+    let tries=0;
+    while(cand.length<8000 && tries<200000){ tries++;
+      const p=[]; const src=[...pool];
+      while(p.length<6){ const idx=Math.floor(Math.random()*src.length); p.push(src.splice(idx,1)[0]); }
+      p.sort((a,b)=>a-b); const k=p.join(",");
+      if(seen.has(k)) continue; if(!isTypical(p)) continue; seen.add(k); cand.push(p);
+    }
+    if(!cand.length){ // 전형 제약 완화
+      const combos=[]; for(let i=0;i<3000;i++){ const p=[...pool].sort(()=>Math.random()-.5).slice(0,6).sort((a,b)=>a-b);
+        const k=p.join(","); if(!seen.has(k)){ seen.add(k); combos.push(p);} }
+      cand.push(...combos);
+    }
+    return cand.map(t=>({t,s:freqScore(t)})).sort((a,b)=> b.s-a.s || keyOf(a.t).localeCompare(keyOf(b.t)))
+      .slice(0,n).map(o=>o.t);
+  }
+
   function generate(n, mode){
+    if(mode==="data") return generateData(n);
     const seen=new Set(), out=[];
     if(mode==="random"){
       while(out.length<n){ const t=sampleCombo(); if(!seen.has(keyOf(t))){ seen.add(keyOf(t)); out.push(t);} }
@@ -344,12 +383,27 @@
 
   // ---------- 렌더 ----------
   const setsEl = document.getElementById("sets");
-  let currentMode = "anti_share";
+  let currentMode = "data";
   const MODE_NOTE = {
+    data:       "→ 데이터에서 가장 많이 나온 번호들로 구성한 조합 (출현합 큰 순)",
     anti_share: "→ 통계적으로 전형적이면서 사람들이 몰리는 번호를 피한 조합",
     typical:    "→ 실제 당첨 조합의 프로필(홀짝·합계·연속)에 부합하는 무작위 조합",
-    random:     "→ 순수 균등 무작위. 위 두 모드와 1등 확률은 완전히 동일합니다."
+    random:     "→ 순수 균등 무작위. 다른 모드와 1등 확률은 완전히 동일합니다."
   };
+
+  function updateDatabar(){
+    const bar = document.getElementById("databar");
+    if(currentMode !== "data"){ bar.style.display="none"; return; }
+    bar.style.display="block";
+    if(DATA_META.source === "synthetic"){
+      bar.className = "databar synthetic";
+      bar.innerHTML = `⚠️ 현재 <b>합성(무작위) 데이터 ${DATA_META.rounds}회차</b> 기준입니다 — `+
+        `실제 추첨이 아니라 '최빈'이 노이즈입니다. 실데이터를 넣으면 진짜 많이 나온 번호로 바뀝니다.`;
+    } else {
+      bar.className = "databar";
+      bar.innerHTML = `집계 소스: <b>실데이터 ${DATA_META.rounds}회차</b> · 번호별 출현 횟수 기준`;
+    }
+  }
 
   function renderSet(t, idx){
     const o=oddCount(t), l=lowCount(t), s=sum(t), risk=sharingRisk(t);
@@ -359,8 +413,10 @@
       b.style.setProperty("--bg", ballColor(n)); b.style.animationDelay=(idx*60+i*45)+"ms";
       b.textContent=String(n).padStart(2,"0"); balls.appendChild(b); });
     const prof=document.createElement("div"); prof.className="profile";
-    prof.innerHTML =
-      `<div class="line">홀짝 <b>${o}:${6-o}</b> · 저고 <b>${l}:${6-l}</b> · 합 <b class="mono">${s}</b></div>`+
+    const freqLine = currentMode==="data"
+      ? `<div class="line">출현합 <b class="mono">${freqScore(t)}</b> · 홀짝 <b>${o}:${6-o}</b> · 합 <b class="mono">${s}</b></div>`
+      : `<div class="line">홀짝 <b>${o}:${6-o}</b> · 저고 <b>${l}:${6-l}</b> · 합 <b class="mono">${s}</b></div>`;
+    prof.innerHTML = freqLine +
       `<div class="risk">분할위험 <div class="meter"><i style="width:${Math.round(risk*100)}%"></i></div> <b class="mono" style="color:var(--ink)">${risk.toFixed(2)}</b></div>`;
     row.append(balls, prof);
     return row;
@@ -371,6 +427,7 @@
     const sets=generate(n, currentMode);
     sets.forEach((t,i)=> setsEl.appendChild(renderSet(t,i)));
     document.getElementById("modeNote").textContent = MODE_NOTE[currentMode];
+    updateDatabar();
   }
   function addOne(){
     if(setsEl.querySelector(".empty")) { draw(1); return; }

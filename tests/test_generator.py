@@ -62,3 +62,59 @@ def test_anti_share_sorted_by_risk():
     recs = G.generate(5, mode="anti_share", seed=9)
     risks = [r.sharing_risk for r in recs]
     assert risks == sorted(risks)
+
+
+# ---------------- 데이터 기반(최빈) ----------------
+def _biased_df(hot=(4, 9, 17, 23, 31, 38), n=400):
+    """hot 번호가 자주 나오도록 인위 편향된 데이터셋."""
+    import numpy as np
+    import pandas as pd
+    from lottolab import data as D
+    rng = np.random.default_rng(0)
+    rows = []
+    others = [x for x in range(1, 46) if x not in hot]
+    for r in range(1, n + 1):
+        if r % 2 == 0:  # 절반은 hot 4개 + 나머지 2개
+            pick = list(rng.choice(hot, 4, replace=False)) + list(rng.choice(others, 2, replace=False))
+        else:
+            pick = list(rng.choice(range(1, 46), 6, replace=False))
+        mains = sorted(int(x) for x in dict.fromkeys(pick))[:6]
+        while len(mains) < 6:
+            c = int(rng.integers(1, 46))
+            if c not in mains:
+                mains.append(c)
+        mains = sorted(mains)
+        bonus = next(int(x) for x in rng.integers(1, 46, 20) if x not in mains)
+        rows.append({"round": r, "date": "", **{f"n{i+1}": mains[i] for i in range(6)}, "bonus": bonus})
+    return pd.DataFrame(rows)[["round", "date"] + D.MAIN_COLS + ["bonus"]]
+
+
+def test_number_frequencies_counts_total():
+    import numpy as np
+    from lottolab import data as D
+    df = D.synthetic_draws(300, seed=1)
+    f = G.number_frequencies(df)
+    assert f[1:].sum() == 300 * 6           # 회차당 6개
+    assert len(f) == 46                       # index 0 미사용 + 1..45
+
+
+def test_frequency_candidates_prefer_hot_numbers():
+    # 편향 데이터에서 최빈 후보가 hot 번호를 실제로 많이 포함하는지.
+    hot = {4, 9, 17, 23, 31, 38}
+    df = _biased_df(tuple(sorted(hot)))
+    cands = G.frequency_candidates(df, n_sets=5, pool_size=18)
+    assert len(cands) == 5
+    top = cands[0]
+    assert set(top["numbers"]) <= set(range(1, 46)) and len(set(top["numbers"])) == 6
+    # 상위 후보가 hot 번호를 다수 포함
+    overlap = len(set(top["numbers"]) & hot)
+    assert overlap >= 3, (top["numbers"], overlap)
+    # freq_score 내림차순 정렬
+    scores = [c["freq_score"] for c in cands]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_frequency_candidates_win_prob_uniform():
+    df = G_df = _biased_df()
+    for c in G.frequency_candidates(df, n_sets=3):
+        assert c["win_probability"] == 1.0 / C.TOTAL

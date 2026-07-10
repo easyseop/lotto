@@ -218,6 +218,92 @@ def generate(
     return [_describe(t) for t in chosen]
 
 
+def number_frequencies(df, window: Optional[int] = None) -> np.ndarray:
+    """
+    데이터에서 번호별(1..45) 출현 횟수를 센다. 반환 배열의 index 1..45 가 각 번호.
+
+    window: 최근 window 회차만 집계(None이면 전체). '요즘 잘 나오는' 번호용.
+    """
+    from lottolab import data as D
+
+    mat = D.main_matrix(df)                       # (T,6)
+    if window is not None and window < len(mat):
+        mat = mat[-window:]
+    counts = np.bincount(mat.ravel(), minlength=N + 1)  # index 0 미사용
+    return counts
+
+
+def frequency_candidates(
+    df,
+    n_sets: int = 5,
+    *,
+    pool_size: int = 18,
+    window: Optional[int] = None,
+    typical: bool = True,
+    seed: int = 0,
+    candidates: int = 30000,
+) -> List[dict]:
+    """
+    **데이터 기반** 최빈 번호 조합 후보 n_sets 개를 반환한다.
+
+    방식:
+      1) 데이터에서 번호별 출현 횟수를 센다(window 로 최근 구간 한정 가능).
+      2) 가장 많이 나온 상위 pool_size 개를 후보 풀로 삼는다.
+      3) 그 풀에서 (typical=True면 전형 프로필을 만족하는) 6-조합을 만들고,
+         '출현 횟수 합(freq_score)'이 큰 순으로 상위 n_sets 개를 고른다.
+
+    ⚠️ 빈도가 높다고 다음 회차 확률이 오르지 않는다(균등 추첨). 이는 '데이터상
+       가장 자주 나온 번호로 구성한 조합'일 뿐, 1등 확률은 여전히 1/8,145,060.
+
+    반환: 각 후보 dict {numbers, freq_score, number_counts, odd_even, low_high, sum,
+                        typical, sharing_risk, win_probability}. freq_score 내림차순.
+    """
+    counts = number_frequencies(df, window=window)
+    # 상위 pool_size 번호(동점은 번호 오름차순으로 안정 정렬)
+    order = sorted(range(1, N + 1), key=lambda i: (-counts[i], i))
+    pool = order[:max(pool_size, K)]
+
+    rng = np.random.default_rng(seed)
+    pool_arr = np.array(pool)
+    seen: set = set()
+    scored: List[Tuple[int, Tuple[int, ...]]] = []
+
+    # 풀이 작으면 전수 열거, 크면 샘플링.
+    from itertools import combinations
+    if len(pool) <= 20:
+        combo_iter = combinations(sorted(pool), K)
+        for t in combo_iter:
+            if typical and not is_typical(t):
+                continue
+            if t in seen:
+                continue
+            seen.add(t)
+            scored.append((int(sum(counts[x] for x in t)), t))
+    else:
+        for _ in range(candidates):
+            t = tuple(sorted(int(x) for x in rng.choice(pool_arr, size=K, replace=False)))
+            if t in seen:
+                continue
+            if typical and not is_typical(t):
+                continue
+            seen.add(t)
+            scored.append((int(sum(counts[x] for x in t)), t))
+
+    if not scored:  # 전형 조합이 없으면 제약 완화
+        return frequency_candidates(df, n_sets, pool_size=pool_size, window=window,
+                                    typical=False, seed=seed, candidates=candidates)
+
+    scored.sort(key=lambda z: (-z[0], z[1]))
+    out: List[dict] = []
+    for freq_score, t in scored[:n_sets]:
+        rec = _describe(t)
+        d = rec.to_dict()
+        d["freq_score"] = freq_score
+        d["number_counts"] = {int(x): int(counts[x]) for x in t}
+        out.append(d)
+    return out
+
+
 def explain() -> str:
     """생성기의 정직한 한계 설명(리포트/출력용)."""
     return (
