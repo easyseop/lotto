@@ -245,22 +245,22 @@
       <p class="hint">모드를 고르고 <b>번호 뽑기</b>를 누르세요. 각 세트의 프로필과 분할위험 점수를 함께 보여줍니다.</p>
 
       <div class="modes" role="group" aria-label="생성 모드">
-        <button class="chip" data-mode="myfilter" data-n="5" aria-pressed="true">
-          내 필터 <small>내가 정한 조건 5줄</small>
+        <button class="chip" data-mode="myfilter" data-n="10" aria-pressed="true">
+          내 필터 <small>내가 정한 조건 10줄</small>
         </button>
         <button class="chip" data-mode="proportional" data-n="10" aria-pressed="false">
           확률 비례 <small>실제 비율 10줄</small>
         </button>
-        <button class="chip" data-mode="portfolio" data-n="5" aria-pressed="false">
-          서로소 5장 <small>커버리지+희소</small>
+        <button class="chip" data-mode="portfolio" data-n="7" aria-pressed="false">
+          서로소 <small>커버리지+희소 7줄</small>
         </button>
-        <button class="chip" data-mode="avoid" data-n="5" aria-pressed="false">
-          실데이터 희소 <small>분할위험 최소</small>
+        <button class="chip" data-mode="avoid" data-n="10" aria-pressed="false">
+          실데이터 희소 <small>분할위험 최소 10줄</small>
         </button>
-        <button class="chip" data-mode="data" data-n="5" aria-pressed="false">
+        <button class="chip" data-mode="data" data-n="10" aria-pressed="false">
           최빈 <small>많이 나온 번호 (비권장)</small>
         </button>
-        <button class="chip" data-mode="random" data-n="5" aria-pressed="false">
+        <button class="chip" data-mode="random" data-n="10" aria-pressed="false">
           순수 무작위 <small>baseline</small>
         </button>
       </div>
@@ -544,7 +544,7 @@
   const setsEl = document.getElementById("sets");
   let currentMode = "myfilter";
   const MODE_NOTE = {
-    myfilter:     "→ 내 조건(홀짝 2:4~4:2·십단위 4종·4연속X·끝수2↓·과거 5·6겹침X) 만족 5줄",
+    myfilter:     "→ 내 조건(홀짝 2:4~4:2·십단위 4종·4연속X·끝수2↓·과거 5·6겹침X) 만족 10줄",
     proportional: "→ 홀짝을 실제 비율(3:3≈42%·4:2≈32%·2:4≈27%)에 맞춰 배분한 10줄",
     portfolio:  "→ 5장이 번호가 안 겹치게(서로소) 30개 커버 + 각 장을 희소 조합으로",
     avoid:      "→ 실제 당첨자수로 검증한 '사람들이 덜 고르는' 희소 조합 (분할위험↓)",
@@ -615,7 +615,7 @@
   }
 
   // ---------- 모드 칩 ----------
-  let currentN = 5;
+  let currentN = 10;
   document.querySelectorAll(".chip").forEach(chip=>{
     chip.addEventListener("click", ()=>{
       document.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed","false"));
@@ -701,6 +701,6 @@
   });
 
   // 초기 1회 자동 생성
-  draw(5);
+  draw(10);
 })();
 </script>
