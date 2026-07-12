@@ -118,3 +118,27 @@ def test_frequency_candidates_win_prob_uniform():
     df = G_df = _biased_df()
     for c in G.frequency_candidates(df, n_sets=3):
         assert c["win_probability"] == 1.0 / C.TOTAL
+
+
+# ---------------- 사용자 고정 필터 ----------------
+def test_generate_custom_respects_rules():
+    from lottolab import data
+    df = data.load_csv("data/draws_real.csv")
+    past = data.main_sets(df)
+    recs = G.generate_custom(df, n_sets=5, seed=1)
+    assert len(recs) == 5
+    for r in recs:
+        t = tuple(r["numbers"])
+        o = sum(x % 2 for x in t)
+        assert 2 <= o <= 4                          # 홀짝 2:4/3:3/4:2
+        assert G._max_per_decade(t) <= 3            # 같은 십단위 최대 3
+        assert G._max_consecutive_run(t) <= 3       # 4연속 금지
+        assert max(len(set(t) & p) for p in past) < 5   # 과거 5·6겹침 없음
+
+
+def test_generate_custom_exclude_partition():
+    from lottolab import data
+    df = data.load_csv("data/draws_real.csv")
+    recs = G.generate_custom(df, n_sets=5, seed=2, exclude_partitions={(3, 3)})
+    for r in recs:
+        assert G.decade_partition(tuple(r["numbers"])) != (3, 3)

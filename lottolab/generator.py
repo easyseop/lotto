@@ -396,6 +396,93 @@ def generate_disjoint_portfolio(n_sets: int = 5, *, seed: Optional[int] = None,
     return {"tickets": [list(t) for t in chosen], "coverage": len(used), "sets": sets}
 
 
+def _max_per_decade(t: Tuple[int, ...]) -> int:
+    """같은 십의자리(10단위)에 몰린 최대 개수. 1~9→0, 10~19→1, ... 40~45→4."""
+    from collections import Counter
+    return max(Counter(x // 10 for x in t).values())
+
+
+def decade_partition(t: Tuple[int, ...]) -> Tuple[int, ...]:
+    """십단위 개수 분포(내림차순 튜플). 예: 1~9에1·30대2·40대3 → (3,2,1)."""
+    from collections import Counter
+    return tuple(sorted(Counter(x // 10 for x in t).values(), reverse=True))
+
+
+# 사용자 지정 기본 필터 (요청 반영: 홀짝 2:4/3:3/4:2, 십단위 최대3, 4연속 제외, 과거 5·6겹침 제외)
+USER_FILTER_DEFAULTS = dict(
+    odd_range=(2, 4),
+    max_per_decade=3,
+    max_run=3,               # 4연속 이상 금지(런 길이 ≤ 3)
+    exclude_past_overlap=5,  # 과거 당첨과 5개 이상 겹치면 제외
+    exclude_partitions=None,
+)
+
+
+def passes_user_filter(t, past_sets, *, odd_range=(2, 4), max_per_decade=3,
+                       max_run=3, exclude_past_overlap=5, exclude_partitions=None) -> bool:
+    """한 조합이 사용자 필터를 통과하는지."""
+    o = sum(x % 2 for x in t)
+    if not (odd_range[0] <= o <= odd_range[1]):
+        return False
+    if _max_per_decade(t) > max_per_decade:
+        return False
+    if _max_consecutive_run(t) > max_run:
+        return False
+    if exclude_partitions and decade_partition(t) in exclude_partitions:
+        return False
+    if exclude_past_overlap and past_sets:
+        ts = set(t)
+        for p in past_sets:
+            if len(ts & p) >= exclude_past_overlap:
+                return False
+    return True
+
+
+def generate_custom(df=None, n_sets: int = 5, *, seed: Optional[int] = None,
+                    sort_by_sparse: bool = True, n_candidates: int = 8000,
+                    **filter_kw) -> List[dict]:
+    """
+    사용자 지정 필터를 통과하는 조합을 n_sets 개 생성(기각표집).
+
+    필터(기본값 USER_FILTER_DEFAULTS): 홀짝 2:4/3:3/4:2, 같은 십단위 최대 3개,
+    숫자 4연속 금지, 과거 당첨과 5·6개 겹침 제외. exclude_partitions 로 특정
+    십단위 분포(예: {(3,3)})를 추가 제외 가능.
+
+    ⚠️ 필터는 당첨확률(1/8,145,060)을 바꾸지 않는다. '희박·찜찜한 모양'을 걸러줄 뿐.
+    """
+    from lottolab import crowd_score as CS
+    from lottolab import data as D
+
+    kw = {**USER_FILTER_DEFAULTS, **filter_kw}
+    if df is None:
+        df = D.load_or_synthesize("data/draws_real.csv")
+    past_sets = D.main_sets(df) if kw.get("exclude_past_overlap") else []
+
+    rng = np.random.default_rng(seed)
+    pool = np.arange(1, N + 1)
+    seen, cand = set(), []
+    tries = 0
+    while len(cand) < n_candidates and tries < n_candidates * 40:
+        tries += 1
+        t = tuple(sorted(int(x) for x in rng.choice(pool, size=K, replace=False)))
+        if t in seen:
+            continue
+        if passes_user_filter(t, past_sets, **kw):
+            seen.add(t)
+            cand.append(t)
+    if not cand:
+        return []
+    if sort_by_sparse:
+        cand.sort(key=CS.avoid_score)
+    out = []
+    for t in cand[:n_sets]:
+        d = _describe(t).to_dict()
+        d["avoid_score"] = round(CS.avoid_score(t), 3)
+        d["decade_partition"] = "-".join(map(str, decade_partition(t)))
+        out.append(d)
+    return out
+
+
 def explain() -> str:
     """생성기의 정직한 한계 설명(리포트/출력용)."""
     return (

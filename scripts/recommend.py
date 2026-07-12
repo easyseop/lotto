@@ -47,10 +47,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="확률 기반 로또 번호 조합 추천")
     ap.add_argument("--sets", type=int, default=5, help="추천 세트 수")
     ap.add_argument("--mode",
-                    choices=["portfolio", "avoid", "data", "anti_share", "typical", "random"],
+                    choices=["myfilter", "portfolio", "avoid", "data",
+                             "anti_share", "typical", "random"],
                     default="portfolio",
-                    help="portfolio=★서로소+희소(추천) / avoid=실데이터 희소 / "
-                         "data=최빈 / anti_share=인기회피(휴리스틱) / typical=전형 / random=무작위")
+                    help="myfilter=사용자 고정필터 / portfolio=★서로소+희소 / avoid=실데이터 희소 / "
+                         "data=최빈 / anti_share=인기회피 / typical=전형 / random=무작위")
+    ap.add_argument("--exclude-partition", nargs="*", default=None,
+                    dest="exclude_partition",
+                    help="myfilter에서 추가 제외할 십단위 분포(예: 3-3 2-2-2)")
     ap.add_argument("--data", default="data/draws_synthetic.csv",
                     help="data 모드에서 쓸 CSV(실데이터 권장)")
     ap.add_argument("--window", type=int, default=None,
@@ -59,6 +63,24 @@ def main() -> int:
     ap.add_argument("--exclude", type=int, nargs="*", default=None,
                     help="제외할 번호(예: 최근 회차)")
     args = ap.parse_args()
+
+    if args.mode == "myfilter":
+        df = D.load_or_synthesize(args.data)
+        excl = {tuple(int(x) for x in p.split("-"))
+                for p in args.exclude_partition} if args.exclude_partition else None
+        recs = G.generate_custom(df, n_sets=args.sets, seed=args.seed,
+                                 exclude_partitions=excl)
+        print("\n[모드: myfilter — 사용자 고정 필터]  당첨확률 불변 = 1/8,145,060")
+        print("규칙: 홀짝 2:4/3:3/4:2 · 같은 십단위 최대 3개 · 4연속 금지 · 과거 5·6겹침 제외"
+              + (f" · 분포제외 {sorted(excl)}" if excl else ""))
+        print(f"\n{'#':>2}  {'번호':<26} {'홀:짝':>5} {'십단위분포':>9} {'avoid':>7}")
+        print("-" * 60)
+        for i, c in enumerate(recs, 1):
+            nums = " ".join(f"{n:2d}" for n in c["numbers"])
+            print(f"{i:>2}  {nums:<26} {c['odd_even']:>5} {c['decade_partition']:>9} "
+                  f"{c['avoid_score']:>+7.2f}")
+        print("\n" + G.explain())
+        return 0
 
     if args.mode == "data":
         return _print_data_mode(args)
