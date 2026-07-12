@@ -408,18 +408,23 @@ def decade_partition(t: Tuple[int, ...]) -> Tuple[int, ...]:
     return tuple(sorted(Counter(x // 10 for x in t).values(), reverse=True))
 
 
-# 사용자 지정 기본 필터 (요청 반영: 홀짝 2:4/3:3/4:2, 십단위 최대3, 4연속 제외, 과거 5·6겹침 제외)
+# 허용 십단위 분포 (요청: 이 4개만) — 2-2-1-1 / 3-2-1 / 3-1-1-1 / 2-1-1-1-1
+ALLOWED_PARTITIONS = {(2, 2, 1, 1), (3, 2, 1), (3, 1, 1, 1), (2, 1, 1, 1, 1)}
+
+# 사용자 지정 기본 필터 (홀짝 2:4/3:3/4:2, 십단위 분포 4종만, 4연속 제외, 과거 5·6겹침 제외)
 USER_FILTER_DEFAULTS = dict(
     odd_range=(2, 4),
     max_per_decade=3,
-    max_run=3,               # 4연속 이상 금지(런 길이 ≤ 3)
-    exclude_past_overlap=5,  # 과거 당첨과 5개 이상 겹치면 제외
+    max_run=3,                       # 4연속 이상 금지(런 길이 ≤ 3)
+    exclude_past_overlap=5,          # 과거 당첨과 5개 이상 겹치면 제외
     exclude_partitions=None,
+    allow_partitions=ALLOWED_PARTITIONS,  # 이 십단위 분포만 허용
 )
 
 
 def passes_user_filter(t, past_sets, *, odd_range=(2, 4), max_per_decade=3,
-                       max_run=3, exclude_past_overlap=5, exclude_partitions=None) -> bool:
+                       max_run=3, exclude_past_overlap=5, exclude_partitions=None,
+                       allow_partitions=None) -> bool:
     """한 조합이 사용자 필터를 통과하는지."""
     o = sum(x % 2 for x in t)
     if not (odd_range[0] <= o <= odd_range[1]):
@@ -428,7 +433,10 @@ def passes_user_filter(t, past_sets, *, odd_range=(2, 4), max_per_decade=3,
         return False
     if _max_consecutive_run(t) > max_run:
         return False
-    if exclude_partitions and decade_partition(t) in exclude_partitions:
+    part = decade_partition(t)
+    if allow_partitions and part not in allow_partitions:
+        return False
+    if exclude_partitions and part in exclude_partitions:
         return False
     if exclude_past_overlap and past_sets:
         ts = set(t)

@@ -71,8 +71,9 @@ def main() -> int:
         recs = G.generate_custom(df, n_sets=args.sets, seed=args.seed,
                                  exclude_partitions=excl)
         print("\n[모드: myfilter — 사용자 고정 필터]  당첨확률 불변 = 1/8,145,060")
-        print("규칙: 홀짝 2:4/3:3/4:2 · 같은 십단위 최대 3개 · 4연속 금지 · 과거 5·6겹침 제외"
-              + (f" · 분포제외 {sorted(excl)}" if excl else ""))
+        print("규칙: 홀짝 2:4/3:3/4:2 · 십단위분포 2-2-1-1/3-2-1/3-1-1-1/2-1-1-1-1 · "
+              "4연속 금지 · 과거 5·6겹침 제외"
+              + (f" · 추가제외 {sorted(excl)}" if excl else ""))
         print(f"\n{'#':>2}  {'번호':<26} {'홀:짝':>5} {'십단위분포':>9} {'avoid':>7}")
         print("-" * 60)
         for i, c in enumerate(recs, 1):
