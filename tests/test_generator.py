@@ -144,3 +144,22 @@ def test_generate_custom_exclude_partition():
     recs = G.generate_custom(df, n_sets=5, seed=2, exclude_partitions={(3, 3)})
     for r in recs:
         assert G.decade_partition(tuple(r["numbers"])) != (3, 3)
+
+
+def test_generate_proportional_10_lines():
+    from lottolab import data
+    df = data.load_csv("data/draws_real.csv")
+    past = data.main_sets(df)
+    recs = G.generate_proportional(df, n_lines=10, seed=3)
+    assert len(recs) == 10
+    for r in recs:
+        t = tuple(r["numbers"])
+        assert 2 <= sum(x % 2 for x in t) <= 4
+        assert G.decade_partition(t) in G.ALLOWED_PARTITIONS
+        assert G._max_same_lastdigit(t) <= 2
+        assert G._max_consecutive_run(t) <= 3
+        assert max(len(set(t) & p) for p in past) < 5
+    # 3:3 이 최다 홀짝이어야(실제 최빈)
+    from collections import Counter
+    oc = Counter(sum(x % 2 for x in r["numbers"]) for r in recs)
+    assert oc[3] >= oc[2] and oc[3] >= oc[4]

@@ -500,6 +500,109 @@ def generate_custom(df=None, n_sets: int = 5, *, seed: Optional[int] = None,
     return out
 
 
+def _encode6(t) -> int:
+    k = 0
+    for x in t:
+        k = k * 46 + x
+    return k
+
+
+def _build_overlap_blocked(past_sets, min_overlap: int = 5):
+    """과거 당첨과 min_overlap 개 이상 겹치는 조합들의 인코딩 집합(빠른 제외용)."""
+    blocked = set()
+    full = set(range(1, N + 1))
+    for Dset in past_sets:
+        Dl = sorted(Dset)
+        blocked.add(_encode6(tuple(Dl)))              # 6개 겹침
+        others = sorted(full - Dset)
+        for x in Dl:                                   # 5개 겹침(하나 교체)
+            base = [n for n in Dl if n != x]
+            for y in others:
+                blocked.add(_encode6(tuple(sorted(base + [y]))))
+    return blocked
+
+
+def generate_proportional(df=None, n_lines: int = 10, *, seed: Optional[int] = None,
+                          pool_size: int = 20000, **filter_kw) -> List[dict]:
+    """
+    '확률 비례' n_lines 줄 생성. 사용자 필터를 통과하는 조합을, 실제 당첨 회차의
+    (홀짝 × 십단위분포) 결합 빈도에 맞춰 배분(최대잔여법)한다. 각 셀은 **대표(무작위)
+    표집**으로 채워 연속·기타 분포도 자연스럽게 실제 비율에 가깝게 나온다.
+    (희소 정렬을 쓰지 않는다 — 그러면 특정 모양이 과대표집되기 때문.)
+
+    ⚠️ 당첨확률(1/8,145,060)은 불변. 10줄의 '모양 분포'를 실제와 맞추는 것뿐.
+    """
+    from collections import Counter
+    from lottolab import data as D
+
+    kw = {**USER_FILTER_DEFAULTS, **filter_kw}
+    ov = kw.get("exclude_past_overlap") or 0
+    if df is None:
+        df = D.load_or_synthesize("data/draws_real.csv")
+    past_sets = D.main_sets(df)
+    blocked = _build_overlap_blocked(past_sets, ov) if ov else set()
+
+    def ok_pattern(t):
+        """모양 필터만(과거 겹침 제외 안 함) — 실제 회차의 빈도 타깃 계산용."""
+        o = sum(x % 2 for x in t)
+        if not (kw["odd_range"][0] <= o <= kw["odd_range"][1]):
+            return False
+        if kw.get("allow_partitions") and decade_partition(t) not in kw["allow_partitions"]:
+            return False
+        if _max_consecutive_run(t) > kw["max_run"]:
+            return False
+        if kw.get("max_same_lastdigit") and _max_same_lastdigit(t) > kw["max_same_lastdigit"]:
+            return False
+        return True
+
+    def ok(t):
+        """생성 후보용 — 모양 필터 + 과거 5·6겹침 제외."""
+        return ok_pattern(t) and not (ov and _encode6(t) in blocked)
+
+    # 1) 실제 회차(모양 필터 통과)에서 홀짝 주변(marginal) 빈도 → 배분(정확히 보존)
+    #    ※ 과거 겹침 제외는 여기 적용 안 함(모든 과거 회차는 자기자신과 6겹침이므로).
+    filt = [t for t in (tuple(sorted(r)) for r in D.main_matrix(df).tolist()) if ok_pattern(t)]
+    nf = len(filt) or 1
+    odd_freq = Counter(sum(x % 2 for x in t) for t in filt)
+    raw = {k: v / nf * n_lines for k, v in odd_freq.items()}
+    quota = {k: int(v) for k, v in raw.items()}
+    for k, _ in sorted(raw.items(), key=lambda kv: -(kv[1] - int(kv[1])))[:n_lines - sum(quota.values())]:
+        quota[k] += 1
+    quota = {k: v for k, v in quota.items() if v > 0}
+
+    # 2) 후보 풀(대표 표집) — 홀짝별로 버킷
+    rng = np.random.default_rng(seed)
+    pool, seen, tries = {}, set(), 0
+    while len(seen) < pool_size and tries < pool_size * 80:
+        tries += 1
+        t = tuple(sorted(int(x) for x in rng.choice(np.arange(1, N + 1), size=K, replace=False)))
+        if t in seen or not ok(t):
+            continue
+        seen.add(t)
+        pool.setdefault(sum(x % 2 for x in t), []).append(t)
+
+    # 3) 홀짝 quota 채우기(무작위) — 십단위·연속은 자연스럽게 대표됨
+    lines = []
+    for o, c in quota.items():
+        cand = pool.get(o, [])
+        if not cand:
+            continue
+        idx = rng.choice(len(cand), size=min(c, len(cand)), replace=False)
+        lines += [cand[i] for i in idx]
+    if len(lines) < n_lines:  # 부족분 보충
+        extra = [t for o in pool for t in pool[o] if t not in lines]
+        rng.shuffle(extra)
+        lines += extra[:n_lines - len(lines)]
+
+    out = []
+    for t in lines[:n_lines]:
+        d = _describe(t).to_dict()
+        d["decade_partition"] = "-".join(map(str, decade_partition(t)))
+        d["max_run"] = _max_consecutive_run(t)
+        out.append(d)
+    return out
+
+
 def explain() -> str:
     """생성기의 정직한 한계 설명(리포트/출력용)."""
     return (

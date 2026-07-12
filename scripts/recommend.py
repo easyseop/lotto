@@ -47,11 +47,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="확률 기반 로또 번호 조합 추천")
     ap.add_argument("--sets", type=int, default=5, help="추천 세트 수")
     ap.add_argument("--mode",
-                    choices=["myfilter", "portfolio", "avoid", "data",
+                    choices=["proportional", "myfilter", "portfolio", "avoid", "data",
                              "anti_share", "typical", "random"],
                     default="portfolio",
-                    help="myfilter=사용자 고정필터 / portfolio=★서로소+희소 / avoid=실데이터 희소 / "
-                         "data=최빈 / anti_share=인기회피 / typical=전형 / random=무작위")
+                    help="proportional=확률비례 10줄 / myfilter=사용자 고정필터 / "
+                         "portfolio=★서로소+희소 / avoid=실데이터 희소 / data=최빈 / "
+                         "anti_share=인기회피 / typical=전형 / random=무작위")
     ap.add_argument("--exclude-partition", nargs="*", default=None,
                     dest="exclude_partition",
                     help="myfilter에서 추가 제외할 십단위 분포(예: 3-3 2-2-2)")
@@ -63,6 +64,24 @@ def main() -> int:
     ap.add_argument("--exclude", type=int, nargs="*", default=None,
                     help="제외할 번호(예: 최근 회차)")
     args = ap.parse_args()
+
+    if args.mode == "proportional":
+        df = D.load_or_synthesize(args.data)
+        n = args.sets if args.sets != 5 else 10   # 기본 10줄
+        recs = G.generate_proportional(df, n_lines=n, seed=args.seed)
+        print(f"\n[모드: proportional — 확률 비례 {n}줄]  당첨확률 불변 = 1/8,145,060")
+        print("필터 통과 조합을 실제 (홀짝×십단위) 빈도에 맞춰 배분 · 대표표집(희소정렬X)\n")
+        print(f"{'#':>2}  {'번호':<26} {'홀:짝':>5} {'십단위':>9} {'연속':>6}")
+        print("-" * 58)
+        from collections import Counter as _C
+        for i, c in enumerate(recs, 1):
+            nums = " ".join(f"{x:2d}" for x in c["numbers"])
+            r = c["max_run"]
+            rt = "없음" if r == 1 else f"{r}연속"
+            print(f"{i:>2}  {nums:<26} {c['odd_even']:>5} {c['decade_partition']:>9} {rt:>6}")
+        oc = _C(r["odd_even"] for r in recs)
+        print(f"\n  홀짝 분포: {dict(oc)}")
+        return 0
 
     if args.mode == "myfilter":
         df = D.load_or_synthesize(args.data)
