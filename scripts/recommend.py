@@ -88,7 +88,7 @@ def main() -> int:
         excl = {tuple(int(x) for x in p.split("-"))
                 for p in args.exclude_partition} if args.exclude_partition else None
         recs = G.generate_custom(df, n_sets=args.sets, seed=args.seed,
-                                 exclude_partitions=excl)
+                                 exclude_partitions=excl, sort_by_sparse=False)
         print("\n[모드: myfilter — 사용자 고정 필터]  당첨확률 불변 = 1/8,145,060")
         print("규칙: 홀짝 2:4/3:3/4:2 · 십단위분포 2-2-1-1/3-2-1/3-1-1-1/2-1-1-1-1 · "
               "4연속 금지 · 끝수 최대2 · 과거 5·6겹침 제외"

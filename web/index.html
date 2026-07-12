@@ -468,9 +468,11 @@
     return cand;
   }
   function generateMyfilter(n){
-    const cand=myFilterCandidates(Math.max(1200, 300*n));
+    const cand=myFilterCandidates(Math.max(1500, 350*n));
     if(!cand.length) return generate(n,"random");
-    return cand.sort((a,b)=>avoidScore(a)-avoidScore(b)).slice(0,n);  // 희소 우선
+    // 대표(무작위) 표집 — 저번호(1~9) 등도 자연 비율로 나오게(희소정렬X)
+    for(let i=cand.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cand[i],cand[j]]=[cand[j],cand[i]];}
+    return cand.slice(0,n);
   }
   // 확률 비례: 홀짝 marginal을 실제 필터통과 빈도(3:3≈42,4:2≈32,2:4≈27%)에 맞춰 배분
   function generateProportional(n){
@@ -557,7 +559,7 @@
     bar.style.display="block";
     if(currentMode === "myfilter"){
       bar.className = "databar";
-      bar.innerHTML = `📊 내 필터 통과 조합만 (과거 <b>1~${DATA_META.rounds}회</b> 중 <b>66.7%</b>가 이 모양) · 희소 우선 정렬`;
+      bar.innerHTML = `📊 내 필터 통과 조합만 (과거 <b>1~${DATA_META.rounds}회</b> 중 <b>66.7%</b>가 이 모양) · 대표 표집(자연 비율)`;
     } else if(currentMode === "proportional"){
       bar.className = "databar";
       bar.innerHTML = `📊 10줄의 홀짝·십단위·연속 비율을 <b>실제 당첨 분포에 맞춰</b> 배분 (예측 아님, 모양 재현)`;
