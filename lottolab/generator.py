@@ -408,14 +408,21 @@ def decade_partition(t: Tuple[int, ...]) -> Tuple[int, ...]:
     return tuple(sorted(Counter(x // 10 for x in t).values(), reverse=True))
 
 
+def _max_same_lastdigit(t: Tuple[int, ...]) -> int:
+    """같은 끝자리(끝수)가 몰린 최대 개수. 예: 3·13·23 → 3."""
+    from collections import Counter
+    return max(Counter(x % 10 for x in t).values())
+
+
 # 허용 십단위 분포 (요청: 이 4개만) — 2-2-1-1 / 3-2-1 / 3-1-1-1 / 2-1-1-1-1
 ALLOWED_PARTITIONS = {(2, 2, 1, 1), (3, 2, 1), (3, 1, 1, 1), (2, 1, 1, 1, 1)}
 
-# 사용자 지정 기본 필터 (홀짝 2:4/3:3/4:2, 십단위 분포 4종만, 4연속 제외, 과거 5·6겹침 제외)
+# 사용자 지정 기본 필터 (홀짝 2:4/3:3/4:2, 십단위 분포 4종, 4연속 제외, 끝수 최대2, 과거 5·6겹침 제외)
 USER_FILTER_DEFAULTS = dict(
     odd_range=(2, 4),
     max_per_decade=3,
     max_run=3,                       # 4연속 이상 금지(런 길이 ≤ 3)
+    max_same_lastdigit=2,            # 같은 끝수 최대 2개
     exclude_past_overlap=5,          # 과거 당첨과 5개 이상 겹치면 제외
     exclude_partitions=None,
     allow_partitions=ALLOWED_PARTITIONS,  # 이 십단위 분포만 허용
@@ -423,8 +430,8 @@ USER_FILTER_DEFAULTS = dict(
 
 
 def passes_user_filter(t, past_sets, *, odd_range=(2, 4), max_per_decade=3,
-                       max_run=3, exclude_past_overlap=5, exclude_partitions=None,
-                       allow_partitions=None) -> bool:
+                       max_run=3, max_same_lastdigit=2, exclude_past_overlap=5,
+                       exclude_partitions=None, allow_partitions=None) -> bool:
     """한 조합이 사용자 필터를 통과하는지."""
     o = sum(x % 2 for x in t)
     if not (odd_range[0] <= o <= odd_range[1]):
@@ -432,6 +439,8 @@ def passes_user_filter(t, past_sets, *, odd_range=(2, 4), max_per_decade=3,
     if _max_per_decade(t) > max_per_decade:
         return False
     if _max_consecutive_run(t) > max_run:
+        return False
+    if max_same_lastdigit and _max_same_lastdigit(t) > max_same_lastdigit:
         return False
     part = decade_partition(t)
     if allow_partitions and part not in allow_partitions:
