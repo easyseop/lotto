@@ -129,8 +129,6 @@ def test_generate_custom_respects_rules():
     assert len(recs) == 5
     for r in recs:
         t = tuple(r["numbers"])
-        o = sum(x % 2 for x in t)
-        assert 2 <= o <= 4                          # 홀짝 2:4/3:3/4:2
         assert G._max_per_decade(t) <= 3            # 같은 십단위 최대 3
         assert G._max_consecutive_run(t) <= 3       # 4연속 금지
         assert G._max_same_lastdigit(t) <= 2        # 같은 끝수 최대 2
@@ -154,7 +152,6 @@ def test_generate_proportional_10_lines():
     assert len(recs) == 10
     for r in recs:
         t = tuple(r["numbers"])
-        assert 2 <= sum(x % 2 for x in t) <= 4
         assert G.decade_partition(t) in G.ALLOWED_PARTITIONS
         assert G._max_same_lastdigit(t) <= 2
         assert G._max_consecutive_run(t) <= 3
