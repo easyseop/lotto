@@ -451,7 +451,8 @@
   function maxLastDigit(t){ const c={}; t.forEach(x=>{const d=x%10; c[d]=(c[d]||0)+1;}); return Math.max(...Object.values(c)); }
   function maxPastOverlap(t){ const s=new Set(t); let m=0; for(const p of PAST){ let k=0; for(const x of p) if(s.has(x)) k++; if(k>m){m=k; if(m>=6) break;} } return m; }
   function passesPattern(t){  // 모양 필터만(과거 겹침 제외 안 함)
-    // 홀짝 제한 없음(0~6, 자연비율)
+    const o=oddCount(t);
+    if(o<2||o>4) return false;
     if(!ALLOWED_PARTS.has(decadePartition(t))) return false;
     if(maxRun(t)>3) return false;
     if(maxLastDigit(t)>2) return false;
@@ -479,15 +480,16 @@
     if(!cand.length) return generate(n,"random");
     // 실제 회차(모양 필터)의 홀짝 분포 — 과거 겹침 제외는 여기 적용 안 함(자기겹침 6)
     const pf=PAST.filter(p=>passesPattern([...p].sort((a,b)=>a-b)));
-    const of={}, raw={}, q={}; for(let k=0;k<=6;k++){of[k]=0;} pf.forEach(p=>{of[oddCount(p)]++;}); const nf=pf.length||1;
-    // Hamilton 배분 (홀짝 0~6 전 범위)
-    for(let k=0;k<=6;k++){ raw[k]=of[k]/nf*n; q[k]=Math.floor(raw[k]); }
-    let rem=n-Object.values(q).reduce((a,b)=>a+b,0);
+    const of={2:0,3:0,4:0}; pf.forEach(p=>{of[oddCount(p)]++;}); const nf=pf.length||1;
+    // Hamilton 배분
+    const raw={2:of[2]/nf*n,3:of[3]/nf*n,4:of[4]/nf*n};
+    const q={2:Math.floor(raw[2]),3:Math.floor(raw[3]),4:Math.floor(raw[4])};
+    let rem=n-(q[2]+q[3]+q[4]);
     Object.keys(raw).sort((a,b)=>(raw[b]-Math.floor(raw[b]))-(raw[a]-Math.floor(raw[a]))).slice(0,rem).forEach(k=>q[k]++);
     // 홀짝별 버킷 → 무작위 채우기(희소정렬X)
-    const bucket={}; for(let k=0;k<=6;k++) bucket[k]=[]; cand.forEach(t=>bucket[oddCount(t)].push(t));
+    const bucket={2:[],3:[],4:[]}; cand.forEach(t=>bucket[oddCount(t)].push(t));
     const out=[];
-    Object.keys(q).sort((a,b)=>q[b]-q[a]).forEach(o=>{ const b=bucket[o]; for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];} out.push(...b.slice(0,q[o])); });
+    for(const o of [3,4,2]){ const b=bucket[o]; for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];} out.push(...b.slice(0,q[o])); }
     // 부족분 보충
     if(out.length<n){ const extra=cand.filter(t=>!out.includes(t)); out.push(...extra.slice(0,n-out.length)); }
     return out.slice(0,n);
@@ -544,8 +546,8 @@
   const setsEl = document.getElementById("sets");
   let currentMode = "myfilter";
   const MODE_NOTE = {
-    myfilter:     "→ 내 조건(십단위 4종·4연속X·끝수2↓·과거 5·6겹침X, 홀짝 제한없음) 만족 10줄",
-    proportional: "→ 홀짝을 실제 비율(3:3·4:2·2:4 위주, 6:0 등 극단은 가끔)에 맞춰 배분한 10줄",
+    myfilter:     "→ 내 조건(홀짝 2:4~4:2·십단위 4종·4연속X·끝수2↓·과거 5·6겹침X) 만족 10줄",
+    proportional: "→ 홀짝을 실제 비율(3:3≈42%·4:2≈32%·2:4≈27%)에 맞춰 배분한 10줄",
     portfolio:  "→ 5장이 번호가 안 겹치게(서로소) 30개 커버 + 각 장을 희소 조합으로",
     avoid:      "→ 실제 당첨자수로 검증한 '사람들이 덜 고르는' 희소 조합 (분할위험↓)",
     data:       "→ 데이터에서 가장 많이 나온 번호 조합 (예측력 없음·분할위험 오히려 불리)",
@@ -663,6 +665,7 @@
     ].join("");
     // 필터 체크
     const checks=[
+      ["홀짝 2:4/3:3/4:2", o>=2&&o<=4],
       ["십단위 4종 분포", ALLOWED_PARTS.has(part)],
       ["4연속 없음", r<=3],
       ["같은 끝수 2개 이하", ld<=2],
